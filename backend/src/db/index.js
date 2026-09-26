@@ -3,13 +3,13 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const { pool } = pg;
+const { Pool } = pg;
 
-const pool = new pool({
+const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
 });
 
-pool.on(connect, () => {
+pool.on("connect", () => {
     console.log("connected to postgress");
 });
 
