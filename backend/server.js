@@ -9,10 +9,10 @@ app.use(cors());
 app.use(express.json());
 
 app.get("/", (req, res) => {
-    res.send("Service Booking Wizard API is running");
+    res.send("Service Booking Wizard API is runing");
 });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () =>{
-    console.log(`server runing on port ${port}`);
+    console.log(`server runing on port ${PORT}`);
 });
