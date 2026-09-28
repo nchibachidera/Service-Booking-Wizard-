@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import pool from "./src/db/index.js";
+import availabilityRouter from "./src/routes/availability.js";
+
 
 dotenv.config();
 
@@ -22,6 +24,8 @@ app.get("/test-db", async (req, res) => {
         res.status(500).json({ error: "Database query failed" });
     }
 });
+
+app.use("/api", availabilityRouter);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () =>{
