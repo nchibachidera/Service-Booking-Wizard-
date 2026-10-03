@@ -24,7 +24,7 @@ router.get("/availability", async (req, res) => {
         const { duration_minutes, provider_id } = serviceResult.rows[0];
 
         // Temporary — just confirm this part works before continuing
-        es.json({ duration_minutes, provider_id });
+        res.json({ duration_minutes, provider_id });
         } catch (err) {
             console.error(err);
             res.status(500).json({ error: "failed to fetch availability" });
