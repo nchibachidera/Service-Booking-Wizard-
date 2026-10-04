@@ -23,8 +23,23 @@ router.get("/availability", async (req, res) => {
 
         const { duration_minutes, provider_id } = serviceResult.rows[0];
 
+        //step 2: figure out the day of the week, then get working hours
+        const dayOfWeek = new Date(date).getDay(); // 0 = sunday ... 6 = saturday
+
+        const hoursResult = await pool.query(
+            "SELECT start_time, end_time FROM working_hours WHERE working_id = $1 AND day_of_week = $2",
+            [provider_id, dayOfWeek]
+        );
+
+        if (hoursResult.rows.length === 0) {
+            //provider doesn't work this day at all
+            return res.json({ available_slots: [] });
+        }
+
+        const { start_time, end_time } = hoursResult.rows[0];
+
         // Temporary — just confirm this part works before continuing
-        res.json({ duration_minutes, provider_id });
+        res.json({ duration_minutes, provider_id, dayOfWeek, start_time, end_time });
         } catch (err) {
             console.error(err);
             res.status(500).json({ error: "failed to fetch availability" });
