@@ -3,6 +3,19 @@ import pool from "../db/index.js"
 
 const router = express.Router();
 
+const SLOT_INTERVAL_MINUTES = 15;
+
+function toMinutes(timeStr){
+    const [h, m] = timeStr.split(":").map(Number);
+    return h * 60 + m;
+}
+
+function fromMinutes(mins) {
+    const h = string(Math.floor(min / 60)).padStart(2, "0");
+    const m = string( mins % 60).padStart(2, "0");
+    return `${h}:${m}`;
+}
+
 router.get("/availability", async (req, res) => {
     try {
         const { date, service_id } = req.query;
