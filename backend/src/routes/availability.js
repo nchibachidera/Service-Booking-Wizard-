@@ -26,8 +26,8 @@ router.get("/availability", async (req, res) => {
         //step 2: figure out the day of the week, then get working hours
         const dayOfWeek = new Date(date).getDay(); // 0 = sunday ... 6 = saturday
 
-        onst hoursResult = await pool.query(
-            "SELECT start_time, end_time FROM working_hours WHERE working_id = $1 AND day_of_week = $2",
+        const hoursResult = await pool.query(
+            "SELECT start_time, end_time FROM working_hours WHERE provider_id = $1 AND day_of_week = $2",
             [provider_id, dayOfWeek]
         );
 
