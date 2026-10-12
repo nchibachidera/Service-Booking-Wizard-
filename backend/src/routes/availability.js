@@ -51,12 +51,12 @@ router.get("/availability", async (req, res) => {
 
         const { start_time, end_time } = hoursResult.rows[0];
 
-        /*/ Temporary — just confirm this part works before continuing
+        // Temporary — just confirm this part works before continuing
         res.json({ duration_minutes, provider_id, dayOfWeek, start_time, end_time });
         } catch (err) {
             console.error(err);
             res.status(500).json({ error: "failed to fetch availability" });
-        } /*/
+        }
 });
 
 export default router
