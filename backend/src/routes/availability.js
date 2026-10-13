@@ -36,6 +36,7 @@ router.get("/availability", async (req, res) => {
 
         const { duration_minutes, provider_id } = serviceResult.rows[0];
 
+
         //step 2: figure out the day of the week, then get working hours
         const dayOfWeek = new Date(date).getDay(); // 0 = sunday ... 6 = saturday
 
@@ -50,6 +51,15 @@ router.get("/availability", async (req, res) => {
         }
 
         const { start_time, end_time } = hoursResult.rows[0];
+
+
+        // step 3: get existing bookings for this provider on this date
+        const bookingResult = await pool.query(
+            "SELECT start_time, end_time FROM bookings WHERE provider_id = $1 AND date = $2 AND status != 'cancelled'",
+            [provider_id, date]
+        );
+
+        const existingBokingss = bookingResult.rows;
 
         // Temporary — just confirm this part works before continuing
         res.json({ duration_minutes, provider_id, dayOfWeek, start_time, end_time });
