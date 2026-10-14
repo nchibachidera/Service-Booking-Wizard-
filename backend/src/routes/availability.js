@@ -61,6 +61,17 @@ router.get("/availability", async (req, res) => {
 
         const existingBokingss = bookingResult.rows;
 
+        // step 4: walk the working window in SLOT_INTERVAL_MINUTES steps
+        const windowStart = toMinutes(start_time);
+        const windowEnd = toMinutes(end_time);
+        const duration = duration_minutes;
+
+        const availableSlots = [];
+        let candidateStart = windowStart;
+
+        while (candidateStart + duration <= windowEnd) {
+            constart
+        }
         // Temporary — just confirm this part works before continuing
         res.json({ duration_minutes, provider_id, dayOfWeek, start_time, end_time });
         } catch (err) {
