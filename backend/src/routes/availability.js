@@ -79,7 +79,7 @@ router.get("/availability", async (req, res) => {
         availableSlots.push(fromMinutes(candidateStart));
       }
 
-      andidateStart += SLOT_INTERVAL_MINUTES;
+      candidateStart += SLOT_INTERVAL_MINUTES;
     }
 
     res.json({ available_slots: availableSlots });
