@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import pool from "./src/db/index.js";
 import availabilityRouter from "./src/routes/availability.js";
-
+import bookingsRouter from "./src/routes/bookings.js";
 
 dotenv.config();
 
@@ -12,7 +12,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get("/", (req, res) => {
-    res.send("Service Booking Wizard API is runing");
+    res.send("Service Booking Wizard API is running");
 });
 
 app.get("/test-db", async (req, res) => {
@@ -26,8 +26,9 @@ app.get("/test-db", async (req, res) => {
 });
 
 app.use("/api", availabilityRouter);
+app.use("/api", bookingsRouter);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () =>{
-    console.log(`server runing on port ${PORT}`);
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
