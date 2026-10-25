@@ -3,6 +3,9 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// return DATE columns as "YYYY-MM-DD" strings instead of JS Date objects
+pg.types.setTypeParser(1082, (val) => val);
+
 const { Pool } = pg;
 
 const pool = new Pool({
@@ -14,7 +17,7 @@ const pool = new Pool({
 });
 
 pool.on("connect", () => {
-    console.log("connected to postgress");
+    console.log("connected to postgres");
 });
 
 export default pool;
