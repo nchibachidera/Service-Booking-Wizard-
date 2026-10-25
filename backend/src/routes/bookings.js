@@ -25,7 +25,7 @@ router.post("/bookings", async (req, res) => {
     const end_time = fromMinutes(toMinutes(start_time) + duration_minutes);
 
     // Layer 1: refuse if an existing booking overlaps this time
-    const conflict = await pool.query(
+    //const conflict = await pool.query(
       `SELECT 1 FROM bookings
        WHERE provider_id = $1
          AND date = $2
@@ -34,11 +34,11 @@ router.post("/bookings", async (req, res) => {
          AND end_time > $3
        LIMIT 1`,
       [provider_id, date, start_time, end_time]
-    );
+   // );
 
-    if (conflict.rows.length > 0) {
-      return res.status(409).json({ error: "that time slot is no longer available" });
-    }
+    //if (conflict.rows.length > 0) {
+    //  return res.status(409).json({ error: "that time slot is no longer available" });
+   // }
 
     const result = await pool.query(
       `INSERT INTO bookings
