@@ -19,5 +19,20 @@ router.post("/auth/login", async (req, res) => {
             "SELECT id, name, email, password_hash FROM providers WHERE LOWER(email) = LOWER($1)",
             [email.trim()]
         );
+
+        // Same message for "no such email" and "wrong password", so the
+    // response never reveals which emails exist
+    const invalid = () =>
+        res.status(401).json({ error: "invalid email or password" });
+
+    if (result.rows.lenth === 0) return invalid();
+
+    const provider = result.rows[0];
+    const matches = await bcrypt.compare(password, provider.password_hash);
+    if (!matches) return invalid();
+
+    const token = jwt.sign({ providerId: provider.id }), process.env.JWT_SECRET, {
+        expiresIn: "8h"
+    }
     }
 })
