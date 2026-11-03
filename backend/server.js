@@ -5,6 +5,7 @@ import availabilityRouter from "./src/routes/availability.js";
 import bookingsRouter from "./src/routes/bookings.js";
 import servicesRouter from "./src/routes/services.js";
 import authRouter from "./src/routes/auth.js";
+import adminRouter from "./src/routes/admin.js";
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ app.use("/api", availabilityRouter);
 app.use("/api", bookingsRouter);
 app.use("/api", servicesRouter);
 app.use("/api", authRouter);
+app.use("/api", adminRouter);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
