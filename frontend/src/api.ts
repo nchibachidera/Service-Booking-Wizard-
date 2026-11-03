@@ -19,6 +19,12 @@ interface ApiSlot {
   available: boolean;
 }
 
+export interface ProviderProfile {
+  id: number;
+  name: string;
+  email: string;
+}
+
 export class ApiError extends Error {
   status: number;
 
@@ -111,5 +117,22 @@ export async function createBooking(input: NewBooking): Promise<{ id: number }> 
       customer_name: input.customerName,
       customer_phone: input.customerPhone
     })
+  });
+}
+
+export async function loginProvider(
+  email: string,
+  password: string
+): Promise<{ token: string; provider: ProviderProfile }> {
+  return request<{ token: string; provider: ProviderProfile }>('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+}
+
+export async function fetchProfile(token: string): Promise<ProviderProfile> {
+  return request<ProviderProfile>('/auth/me', {
+    headers: { Authorization: `Bearer ${token}` }
   });
 }
