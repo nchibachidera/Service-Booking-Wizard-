@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import type { Service, ServiceCategory, TimeSlot } from './types/booking';
+import type { Booking, BookingStatus } from './types/admin';
 
 // Change this when the backend is deployed
 const API_URL = 'http://localhost:5000/api';
@@ -17,6 +18,21 @@ interface ApiService {
 interface ApiSlot {
   time: string;
   available: boolean;
+}
+
+interface ApiAdminBooking {
+  id: number;
+  customer_name: string;
+  customer_phone: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  status: BookingStatus;
+  created_at: string;
+  service_id: number;
+  service_name: string;
+  duration_minutes: number;
+  price: string;
 }
 
 export interface ProviderProfile {
@@ -56,6 +72,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return data as T;
 }
 
+function authHeaders(token: string): Record<string, string> {
+  return { Authorization: `Bearer ${token}` };
+}
+
 function toService(row: ApiService): Service {
   return {
     id: String(row.id),
@@ -75,6 +95,36 @@ function isTooSoon(dateIso: string, time: string): boolean {
   if (format(now, 'yyyy-MM-dd') !== dateIso) return false;
   const [hours, minutes] = time.split(':').map(Number);
   return hours * 60 + minutes <= now.getHours() * 60 + now.getMinutes() + 30;
+}
+
+// "5 min ago", "2 hours ago", "Yesterday", "3 days ago", "1 week ago"
+function bookedLabel(createdAt: string): string {
+  const minutes = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+  if (Number.isNaN(minutes) || minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+  const weeks = Math.floor(days / 7);
+  return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
+}
+
+function toAdminBooking(row: ApiAdminBooking): Booking {
+  return {
+    id: String(row.id),
+    customerName: row.customer_name,
+    phone: row.customer_phone,
+    serviceId: String(row.service_id),
+    serviceName: row.service_name,
+    durationMinutes: row.duration_minutes,
+    price: Number(row.price),
+    dateIso: row.date.slice(0, 10),
+    time: row.start_time.slice(0, 5),
+    status: row.status,
+    bookedLabel: bookedLabel(row.created_at)
+  };
 }
 
 export async function fetchServices(): Promise<Service[]> {
@@ -133,6 +183,28 @@ export async function loginProvider(
 
 export async function fetchProfile(token: string): Promise<ProviderProfile> {
   return request<ProviderProfile>('/auth/me', {
-    headers: { Authorization: `Bearer ${token}` }
+    headers: authHeaders(token)
   });
+}
+
+export async function fetchAdminBookings(token: string): Promise<Booking[]> {
+  const rows = await request<ApiAdminBooking[]>('/admin/bookings', {
+    headers: authHeaders(token)
+  });
+  return rows.map(toAdminBooking);
+}
+
+export async function updateBookingStatus(
+  token: string,
+  id: string,
+  status: BookingStatus
+): Promise<void> {
+  await request<{ id: number; status: BookingStatus }>(
+    `/admin/bookings/${encodeURIComponent(id)}/status`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+      body: JSON.stringify({ status })
+    }
+  );
 }

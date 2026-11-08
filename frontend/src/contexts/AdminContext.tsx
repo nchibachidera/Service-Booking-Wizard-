@@ -6,13 +6,15 @@ import React, {
   useMemo,
   useState
 } from 'react';
-import { initialBookings } from '../data/bookings';
+import { format } from 'date-fns';
 import { initialBlockedDates, initialWorkingDays } from '../data/availability';
 import { getBookingStats, type BookingStats } from '../utils/adminStats';
 import {
   ApiError,
+  fetchAdminBookings,
   fetchProfile,
   loginProvider,
+  updateBookingStatus,
   type ProviderProfile
 } from '../api';
 import type {
@@ -31,8 +33,11 @@ interface AdminContextValue {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => void;
   bookings: Booking[];
+  bookingsLoading: boolean;
+  bookingsError: string;
+  reloadBookings: () => void;
   stats: BookingStats;
-  setBookingStatus: (id: string, status: BookingStatus) => void;
+  setBookingStatus: (id: string, status: BookingStatus) => Promise<void>;
   workingDays: WorkingDay[];
   updateWorkingDay: (key: WeekdayKey, patch: Partial<WorkingDay>) => void;
   applyToWeekdays: (key: WeekdayKey) => void;
@@ -102,7 +107,12 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [account, setAccount] = useState<ProviderAccount | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [bookings, setBookings] = useState<Booking[]>(initialBookings);
+
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [bookingsError, setBookingsError] = useState('');
+  const [bookingsReload, setBookingsReload] = useState(0);
+
   const [workingDays, setWorkingDays] =
     useState<WorkingDay[]>(initialWorkingDays);
   const [blockedDates, setBlockedDates] =
@@ -166,6 +176,48 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timer);
   }, [token, signOut]);
 
+  // Load the provider's bookings once signed in (upcoming only, like the mock)
+  useEffect(() => {
+    if (!token) {
+      setBookings([]);
+      setBookingsError('');
+      setBookingsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setBookingsLoading(true);
+    setBookingsError('');
+
+    fetchAdminBookings(token)
+      .then((list) => {
+        if (cancelled) return;
+        const today = format(new Date(), 'yyyy-MM-dd');
+        setBookings(list.filter((booking) => booking.dateIso >= today));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status === 401) {
+          signOut();
+          return;
+        }
+        setBookingsError(
+          err instanceof Error ? err.message : 'Could not load bookings.'
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setBookingsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, bookingsReload, signOut]);
+
+  const reloadBookings = useCallback(() => {
+    setBookingsReload((count) => count + 1);
+  }, []);
+
   // Throws an Error with a readable message if the login fails
   const signIn = useCallback(async (email: string, password: string) => {
     const result = await loginProvider(email, password);
@@ -174,15 +226,23 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     setAccount(toAccount(result.provider));
   }, []);
 
+  // Saves to the server first, then updates the screen. Throws if the server refuses.
   const setBookingStatus = useCallback(
-    (id: string, status: BookingStatus) => {
+    async (id: string, status: BookingStatus) => {
+      if (!token) throw new Error('Please sign in again.');
+      try {
+        await updateBookingStatus(token, id, status);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) signOut();
+        throw err;
+      }
       setBookings((current) =>
         current.map((booking) =>
           booking.id === id ? { ...booking, status } : booking
         )
       );
     },
-    []
+    [token, signOut]
   );
 
   const updateWorkingDay = useCallback(
@@ -237,6 +297,9 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signOut,
       bookings,
+      bookingsLoading,
+      bookingsError,
+      reloadBookings,
       stats: getBookingStats(bookings),
       setBookingStatus,
       workingDays,
@@ -253,6 +316,9 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signOut,
       bookings,
+      bookingsLoading,
+      bookingsError,
+      reloadBookings,
       setBookingStatus,
       workingDays,
       updateWorkingDay,
