@@ -6,18 +6,20 @@ import type { BlockedDate } from '../../types/admin';
 
 interface BlockedDatesProps {
   dates: BlockedDate[];
-  onAdd: (dateIso: string, reason: string) => void;
-  onRemove: (id: string) => void;
+  onAdd: (dateIso: string, reason: string) => Promise<void>;
+  onRemove: (id: string) => Promise<void>;
 }
 
 export function BlockedDates({ dates, onAdd, onRemove }: BlockedDatesProps) {
   const [dateIso, setDateIso] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   const today = format(new Date(), 'yyyy-MM-dd');
 
-  const handleAdd = (event: React.FormEvent) => {
+  const handleAdd = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!dateIso) {
       setError('Choose a date to block.');
@@ -27,17 +29,39 @@ export function BlockedDates({ dates, onAdd, onRemove }: BlockedDatesProps) {
       setError('That date is already blocked.');
       return;
     }
-    onAdd(dateIso, reason);
-    setDateIso('');
-    setReason('');
     setError('');
+    setSaving(true);
+    try {
+      await onAdd(dateIso, reason);
+      setDateIso('');
+      setReason('');
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Could not block that date.'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async (id: string) => {
+    setError('');
+    setRemovingId(id);
+    try {
+      await onRemove(id);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Could not unblock that date.'
+      );
+    } finally {
+      setRemovingId(null);
+    }
   };
 
   return (
     <section
       aria-labelledby="blocked-heading"
       className="overflow-hidden rounded-2xl bg-surface shadow-soft">
-      
       <div className="border-b border-line/70 px-5 py-3.5">
         <h2 id="blocked-heading" className="text-[15px] font-semibold">
           Blocked dates
@@ -64,14 +88,13 @@ export function BlockedDates({ dates, onAdd, onRemove }: BlockedDatesProps) {
               }}
               aria-invalid={Boolean(error)}
               className="h-9 w-full rounded-xl bg-canvas px-2.5 text-[13px] tabular-nums text-ink shadow-inset focus:outline-none focus:ring-2 focus:ring-accent-ring" />
-            
           </div>
           <button
             type="submit"
-            className="flex h-9 items-center gap-1.5 rounded-xl bg-accent px-3 text-[13px] font-semibold text-white transition-colors duration-150 ease-expo hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
-            
+            disabled={saving}
+            className="flex h-9 items-center gap-1.5 rounded-xl bg-accent px-3 text-[13px] font-semibold text-white transition-colors duration-150 ease-expo hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
             <PlusIcon aria-hidden="true" className="h-3.5 w-3.5" />
-            Block
+            {saving ? 'Blocking…' : 'Block'}
           </button>
         </div>
         <label htmlFor="block-reason" className="sr-only">
@@ -80,32 +103,31 @@ export function BlockedDates({ dates, onAdd, onRemove }: BlockedDatesProps) {
         <input
           id="block-reason"
           type="text"
+          maxLength={120}
           placeholder="Reason (optional)"
           value={reason}
           onChange={(event) => setReason(event.target.value)}
           className="h-9 w-full rounded-xl bg-canvas px-2.5 text-[13px] text-ink shadow-inset placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-accent-ring" />
-        
-        {error &&
-        <p role="alert" className="text-[13px] text-danger">
+        {error && (
+          <p role="alert" className="text-[13px] text-danger">
             {error}
           </p>
-        }
+        )}
       </form>
 
-      {dates.length === 0 ?
-      <p className="border-t border-line/60 px-5 py-6 text-[13px] text-muted">
+      {dates.length === 0 ? (
+        <p className="border-t border-line/60 px-5 py-6 text-[13px] text-muted">
           Nothing blocked — your weekly hours apply to every upcoming date.
-        </p> :
-
-      <ul className="border-t border-line/60">
-          {dates.map((entry, index) =>
-        <li
-          key={entry.id}
-          className={[
-          'flex items-center gap-3 px-5 py-3',
-          index > 0 ? 'border-t border-line/60' : ''].
-          join(' ')}>
-          
+        </p>
+      ) : (
+        <ul className="border-t border-line/60">
+          {dates.map((entry, index) => (
+            <li
+              key={entry.id}
+              className={[
+                'flex items-center gap-3 px-5 py-3',
+                index > 0 ? 'border-t border-line/60' : ''
+              ].join(' ')}>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13.5px] font-medium">
                   {formatDayLong(entry.dateIso)}
@@ -115,17 +137,17 @@ export function BlockedDates({ dates, onAdd, onRemove }: BlockedDatesProps) {
                 </p>
               </div>
               <button
-            type="button"
-            onClick={() => onRemove(entry.id)}
-            aria-label={`Unblock ${formatDayLong(entry.dateIso)}`}
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-faint transition-colors duration-150 ease-expo hover:bg-danger-soft hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring">
-            
+                type="button"
+                disabled={removingId === entry.id}
+                onClick={() => handleRemove(entry.id)}
+                aria-label={`Unblock ${formatDayLong(entry.dateIso)}`}
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-faint transition-colors duration-150 ease-expo hover:bg-danger-soft hover:text-danger disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring">
                 <Trash2Icon aria-hidden="true" className="h-4 w-4" />
               </button>
             </li>
-        )}
+          ))}
         </ul>
-      }
-    </section>);
-
+      )}
+    </section>
+  );
 }

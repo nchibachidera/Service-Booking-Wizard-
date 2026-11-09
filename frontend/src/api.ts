@@ -1,6 +1,13 @@
 import { format } from 'date-fns';
+import { initialWorkingDays } from './data/availability';
 import type { Service, ServiceCategory, TimeSlot } from './types/booking';
-import type { Booking, BookingStatus } from './types/admin';
+import type {
+  BlockedDate,
+  Booking,
+  BookingStatus,
+  WeekdayKey,
+  WorkingDay
+} from './types/admin';
 
 // Change this when the backend is deployed
 const API_URL = 'http://localhost:5000/api';
@@ -35,10 +42,27 @@ interface ApiAdminBooking {
   price: string;
 }
 
+interface ApiWorkingHour {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
+interface ApiBlockedDate {
+  id: number;
+  date: string;
+  reason: string;
+}
+
 export interface ProviderProfile {
   id: number;
   name: string;
   email: string;
+}
+
+export interface CreatedBlockedDate {
+  blockedDate: BlockedDate;
+  bookingsOnDate: number;
 }
 
 export class ApiError extends Error {
@@ -127,6 +151,40 @@ function toAdminBooking(row: ApiAdminBooking): Booking {
   };
 }
 
+// The database stores Sunday as 0 and Saturday as 6
+const DAY_INDEX: Record<WeekdayKey, number> = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6
+};
+
+// The screen's day list (labels, order, default hours) comes from the template;
+// a day without a row in the database is closed
+function toWorkingDays(rows: ApiWorkingHour[]): WorkingDay[] {
+  return initialWorkingDays.map((template) => {
+    const row = rows.find((item) => item.day_of_week === DAY_INDEX[template.key]);
+    if (!row) return { ...template, isOpen: false };
+    return {
+      ...template,
+      isOpen: true,
+      opensAt: row.start_time.slice(0, 5),
+      closesAt: row.end_time.slice(0, 5)
+    };
+  });
+}
+
+function toBlockedDate(row: ApiBlockedDate): BlockedDate {
+  return {
+    id: String(row.id),
+    dateIso: row.date.slice(0, 10),
+    reason: row.reason
+  };
+}
+
 export async function fetchServices(): Promise<Service[]> {
   const rows = await request<ApiService[]>('/services');
   return rows.map(toService);
@@ -207,4 +265,61 @@ export async function updateBookingStatus(
       body: JSON.stringify({ status })
     }
   );
+}
+
+export async function fetchWorkingDays(token: string): Promise<WorkingDay[]> {
+  const rows = await request<ApiWorkingHour[]>('/admin/working-hours', {
+    headers: authHeaders(token)
+  });
+  return toWorkingDays(rows);
+}
+
+// Sends the whole week; only open days are included
+export async function saveWorkingDays(
+  token: string,
+  days: WorkingDay[]
+): Promise<void> {
+  await request<{ saved: number }>('/admin/working-hours', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+    body: JSON.stringify({
+      days: days
+        .filter((day) => day.isOpen)
+        .map((day) => ({
+          day_of_week: DAY_INDEX[day.key],
+          start_time: day.opensAt,
+          end_time: day.closesAt
+        }))
+    })
+  });
+}
+
+export async function fetchBlockedDates(token: string): Promise<BlockedDate[]> {
+  const rows = await request<ApiBlockedDate[]>('/admin/blocked-dates', {
+    headers: authHeaders(token)
+  });
+  return rows.map(toBlockedDate);
+}
+
+export async function createBlockedDate(
+  token: string,
+  dateIso: string,
+  reason: string
+): Promise<CreatedBlockedDate> {
+  const row = await request<ApiBlockedDate & { bookings_on_date: number }>(
+    '/admin/blocked-dates',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+      body: JSON.stringify({ date: dateIso, reason })
+    }
+  );
+  return { blockedDate: toBlockedDate(row), bookingsOnDate: row.bookings_on_date };
+}
+
+export async function deleteBlockedDate(token: string, id: string): Promise<void> {
+  await request<{ id: number }>(`/admin/blocked-dates/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(token)
+  });
 }

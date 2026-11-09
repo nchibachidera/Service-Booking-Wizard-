@@ -4,17 +4,24 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from 'react';
 import { format } from 'date-fns';
-import { initialBlockedDates, initialWorkingDays } from '../data/availability';
+import { initialWorkingDays } from '../data/availability';
 import { getBookingStats, type BookingStats } from '../utils/adminStats';
 import {
   ApiError,
+  createBlockedDate,
+  deleteBlockedDate,
   fetchAdminBookings,
+  fetchBlockedDates,
   fetchProfile,
+  fetchWorkingDays,
   loginProvider,
+  saveWorkingDays,
   updateBookingStatus,
+  type CreatedBlockedDate,
   type ProviderProfile
 } from '../api';
 import type {
@@ -25,6 +32,14 @@ import type {
   WeekdayKey,
   WorkingDay
 } from '../types/admin';
+
+export type HoursStatus =
+  | 'idle'
+  | 'pending'
+  | 'saving'
+  | 'saved'
+  | 'invalid'
+  | 'error';
 
 interface AdminContextValue {
   account: ProviderAccount | null;
@@ -38,12 +53,17 @@ interface AdminContextValue {
   reloadBookings: () => void;
   stats: BookingStats;
   setBookingStatus: (id: string, status: BookingStatus) => Promise<void>;
+  availabilityLoading: boolean;
+  availabilityError: string;
+  reloadAvailability: () => void;
   workingDays: WorkingDay[];
+  hoursStatus: HoursStatus;
+  hoursError: string;
   updateWorkingDay: (key: WeekdayKey, patch: Partial<WorkingDay>) => void;
   applyToWeekdays: (key: WeekdayKey) => void;
   blockedDates: BlockedDate[];
-  addBlockedDate: (dateIso: string, reason: string) => void;
-  removeBlockedDate: (id: string) => void;
+  addBlockedDate: (dateIso: string, reason: string) => Promise<number>;
+  removeBlockedDate: (id: string) => Promise<void>;
 }
 
 const AdminContext = createContext<AdminContextValue | null>(null);
@@ -57,6 +77,7 @@ const WEEKDAYS: WeekdayKey[] = [
 ];
 
 const TOKEN_KEY = 'sbw_admin_token';
+const SAVE_DELAY_MS = 600;
 
 function readToken(): string | null {
   try {
@@ -109,14 +130,22 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
   const [bookingsError, setBookingsError] = useState('');
   const [bookingsReload, setBookingsReload] = useState(0);
 
   const [workingDays, setWorkingDays] =
     useState<WorkingDay[]>(initialWorkingDays);
-  const [blockedDates, setBlockedDates] =
-    useState<BlockedDate[]>(initialBlockedDates);
+  const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
+  const [availabilityLoading, setAvailabilityLoading] = useState(true);
+  const [availabilityError, setAvailabilityError] = useState('');
+  const [availabilityReload, setAvailabilityReload] = useState(0);
+  const [hoursStatus, setHoursStatus] = useState<HoursStatus>('idle');
+  const [hoursError, setHoursError] = useState('');
+
+  // The newest working hours, readable inside timers without going stale
+  const workingRef = useRef<WorkingDay[]>(initialWorkingDays);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const signOut = useCallback(() => {
     clearToken();
@@ -181,7 +210,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     if (!token) {
       setBookings([]);
       setBookingsError('');
-      setBookingsLoading(false);
+      setBookingsLoading(true);
       return;
     }
 
@@ -214,8 +243,67 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     };
   }, [token, bookingsReload, signOut]);
 
+  // Load working hours and blocked dates once signed in
+  useEffect(() => {
+    if (!token) {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      workingRef.current = initialWorkingDays;
+      setWorkingDays(initialWorkingDays);
+      setBlockedDates([]);
+      setAvailabilityError('');
+      setAvailabilityLoading(true);
+      setHoursStatus('idle');
+      return;
+    }
+
+    let cancelled = false;
+    setAvailabilityLoading(true);
+    setAvailabilityError('');
+
+    Promise.all([fetchWorkingDays(token), fetchBlockedDates(token)])
+      .then(([days, blocked]) => {
+        if (cancelled) return;
+        const today = format(new Date(), 'yyyy-MM-dd');
+        workingRef.current = days;
+        setWorkingDays(days);
+        setBlockedDates(blocked.filter((entry) => entry.dateIso >= today));
+        setHoursStatus('idle');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status === 401) {
+          signOut();
+          return;
+        }
+        setAvailabilityError(
+          err instanceof Error ? err.message : 'Could not load your availability.'
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setAvailabilityLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, availabilityReload, signOut]);
+
+  // Don't leave a pending save timer behind if the provider is removed
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, []);
+
   const reloadBookings = useCallback(() => {
     setBookingsReload((count) => count + 1);
+  }, []);
+
+  const reloadAvailability = useCallback(() => {
+    setAvailabilityReload((count) => count + 1);
   }, []);
 
   // Throws an Error with a readable message if the login fails
@@ -245,49 +333,129 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     [token, signOut]
   );
 
-  const updateWorkingDay = useCallback(
-    (key: WeekdayKey, patch: Partial<WorkingDay>) => {
-      setWorkingDays((current) =>
-        current.map((day) => (day.key === key ? { ...day, ...patch } : day))
+  // Saves the current working hours to the server
+  const persistWorkingDays = useCallback(async () => {
+    saveTimer.current = null;
+    if (!token) return;
+
+    const current = workingRef.current;
+    const invalid = current.some(
+      (day) => day.isOpen && day.closesAt <= day.opensAt
+    );
+    if (invalid) {
+      setHoursStatus('invalid');
+      return;
+    }
+
+    setHoursStatus('saving');
+    try {
+      await saveWorkingDays(token, current);
+      // If the provider kept editing meanwhile, a newer save is already queued
+      if (saveTimer.current === null) setHoursStatus('saved');
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        signOut();
+        return;
+      }
+      setHoursError(
+        err instanceof Error ? err.message : 'Could not save your hours.'
       );
+      setHoursStatus('error');
+      // Show what is really saved, unless a newer edit is waiting
+      if (saveTimer.current === null) {
+        try {
+          const fresh = await fetchWorkingDays(token);
+          workingRef.current = fresh;
+          setWorkingDays(fresh);
+        } catch {
+          // keep what is on screen; the error message is already showing
+        }
+      }
+    }
+  }, [token, signOut]);
+
+  // Updates the screen straight away and saves a moment after the last change
+  const commitWorkingDays = useCallback(
+    (next: WorkingDay[]) => {
+      workingRef.current = next;
+      setWorkingDays(next);
+      setHoursStatus('pending');
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => {
+        void persistWorkingDays();
+      }, SAVE_DELAY_MS);
     },
-    []
+    [persistWorkingDays]
   );
 
-  const applyToWeekdays = useCallback((key: WeekdayKey) => {
-    setWorkingDays((current) => {
-      const source = current.find((day) => day.key === key);
-      if (!source) return current;
-      return current.map((day) =>
-        WEEKDAYS.includes(day.key)
-          ? {
-              ...day,
-              isOpen: source.isOpen,
-              opensAt: source.opensAt,
-              closesAt: source.closesAt
-            }
-          : day
+  const updateWorkingDay = useCallback(
+    (key: WeekdayKey, patch: Partial<WorkingDay>) => {
+      commitWorkingDays(
+        workingRef.current.map((day) =>
+          day.key === key ? { ...day, ...patch } : day
+        )
       );
-    });
-  }, []);
+    },
+    [commitWorkingDays]
+  );
 
-  const addBlockedDate = useCallback((dateIso: string, reason: string) => {
-    setBlockedDates((current) => {
-      if (current.some((entry) => entry.dateIso === dateIso)) return current;
-      const next: BlockedDate = {
-        id: `bd-${Date.now()}`,
-        dateIso,
-        reason: reason.trim() || 'Unavailable'
-      };
-      return [...current, next].sort((a, b) =>
-        a.dateIso.localeCompare(b.dateIso)
+  const applyToWeekdays = useCallback(
+    (key: WeekdayKey) => {
+      const source = workingRef.current.find((day) => day.key === key);
+      if (!source) return;
+      commitWorkingDays(
+        workingRef.current.map((day) =>
+          WEEKDAYS.includes(day.key)
+            ? {
+                ...day,
+                isOpen: source.isOpen,
+                opensAt: source.opensAt,
+                closesAt: source.closesAt
+              }
+            : day
+        )
       );
-    });
-  }, []);
+    },
+    [commitWorkingDays]
+  );
 
-  const removeBlockedDate = useCallback((id: string) => {
-    setBlockedDates((current) => current.filter((entry) => entry.id !== id));
-  }, []);
+  // Returns how many bookings already exist on that date. Throws if the server refuses.
+  const addBlockedDate = useCallback(
+    async (dateIso: string, reason: string): Promise<number> => {
+      if (!token) throw new Error('Please sign in again.');
+      let created: CreatedBlockedDate;
+      try {
+        created = await createBlockedDate(token, dateIso, reason);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) signOut();
+        throw err;
+      }
+      setBlockedDates((current) => {
+        if (current.some((entry) => entry.dateIso === created.blockedDate.dateIso)) {
+          return current;
+        }
+        return [...current, created.blockedDate].sort((a, b) =>
+          a.dateIso.localeCompare(b.dateIso)
+        );
+      });
+      return created.bookingsOnDate;
+    },
+    [token, signOut]
+  );
+
+  const removeBlockedDate = useCallback(
+    async (id: string): Promise<void> => {
+      if (!token) throw new Error('Please sign in again.');
+      try {
+        await deleteBlockedDate(token, id);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) signOut();
+        throw err;
+      }
+      setBlockedDates((current) => current.filter((entry) => entry.id !== id));
+    },
+    [token, signOut]
+  );
 
   const value = useMemo<AdminContextValue>(
     () => ({
@@ -302,7 +470,12 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       reloadBookings,
       stats: getBookingStats(bookings),
       setBookingStatus,
+      availabilityLoading,
+      availabilityError,
+      reloadAvailability,
       workingDays,
+      hoursStatus,
+      hoursError,
       updateWorkingDay,
       applyToWeekdays,
       blockedDates,
@@ -320,7 +493,12 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       bookingsError,
       reloadBookings,
       setBookingStatus,
+      availabilityLoading,
+      availabilityError,
+      reloadAvailability,
       workingDays,
+      hoursStatus,
+      hoursError,
       updateWorkingDay,
       applyToWeekdays,
       blockedDates,
