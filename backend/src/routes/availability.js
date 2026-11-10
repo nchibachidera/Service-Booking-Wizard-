@@ -19,7 +19,7 @@ router.get("/availability", async (req, res) => {
     }
 
     // Step 1: get the service's duration
-    const serviceResult = await pool.query(
+    onst serviceResult = await pool.query(
       "SELECT duration_minutes, provider_id FROM services WHERE id = $1",
       [service_id]
     );
