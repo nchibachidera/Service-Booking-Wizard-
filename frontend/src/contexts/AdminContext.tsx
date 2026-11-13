@@ -43,6 +43,7 @@ export type HoursStatus =
 
 interface AdminContextValue {
   account: ProviderAccount | null;
+  updateAccount: (patch: Partial<ProviderAccount>) => void;
   token: string | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
@@ -115,12 +116,11 @@ function tokenExpiryMs(token: string): number | null {
   }
 }
 
-// The database stores one name per provider (the business name)
 function toAccount(profile: ProviderProfile): ProviderAccount {
   return {
     email: profile.email,
     name: profile.name,
-    studio: profile.name
+    studio: profile.studio_name
   };
 }
 
@@ -151,6 +151,11 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     clearToken();
     setToken(null);
     setAccount(null);
+  }, []);
+
+  // Lets the Settings page update the name shown in the admin after a save
+  const updateAccount = useCallback((patch: Partial<ProviderAccount>) => {
+    setAccount((current) => (current ? { ...current, ...patch } : current));
   }, []);
 
   // On first load, check whether a saved login is still valid
@@ -460,6 +465,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AdminContextValue>(
     () => ({
       account,
+      updateAccount,
       token,
       loading,
       signIn,
@@ -484,6 +490,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       account,
+      updateAccount,
       token,
       loading,
       signIn,

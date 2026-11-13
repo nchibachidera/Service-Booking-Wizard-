@@ -54,10 +54,33 @@ interface ApiBlockedDate {
   reason: string;
 }
 
+interface ApiSettings {
+  name: string;
+  studio_name: string;
+  phone: string;
+  min_notice_hours: number;
+  cancel_window_hours: number;
+  auto_confirm: boolean;
+  sms_reminders: boolean;
+  daily_digest: boolean;
+}
+
 export interface ProviderProfile {
   id: number;
   name: string;
+  studio_name: string;
   email: string;
+}
+
+export interface ProviderSettings {
+  name: string;
+  studioName: string;
+  phone: string;
+  minNoticeHours: number;
+  cancelWindowHours: number;
+  autoConfirm: boolean;
+  smsReminders: boolean;
+  dailyDigest: boolean;
 }
 
 export interface CreatedBlockedDate {
@@ -182,6 +205,19 @@ function toBlockedDate(row: ApiBlockedDate): BlockedDate {
     id: String(row.id),
     dateIso: row.date.slice(0, 10),
     reason: row.reason
+  };
+}
+
+function toSettings(row: ApiSettings): ProviderSettings {
+  return {
+    name: row.name,
+    studioName: row.studio_name,
+    phone: row.phone,
+    minNoticeHours: row.min_notice_hours,
+    cancelWindowHours: row.cancel_window_hours,
+    autoConfirm: row.auto_confirm,
+    smsReminders: row.sms_reminders,
+    dailyDigest: row.daily_digest
   };
 }
 
@@ -322,4 +358,32 @@ export async function deleteBlockedDate(token: string, id: string): Promise<void
     method: 'DELETE',
     headers: authHeaders(token)
   });
+}
+
+export async function fetchSettings(token: string): Promise<ProviderSettings> {
+  const row = await request<ApiSettings>('/admin/settings', {
+    headers: authHeaders(token)
+  });
+  return toSettings(row);
+}
+
+export async function saveSettings(
+  token: string,
+  settings: ProviderSettings
+): Promise<ProviderSettings> {
+  const row = await request<ApiSettings>('/admin/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+    body: JSON.stringify({
+      name: settings.name,
+      studio_name: settings.studioName,
+      phone: settings.phone,
+      min_notice_hours: settings.minNoticeHours,
+      cancel_window_hours: settings.cancelWindowHours,
+      auto_confirm: settings.autoConfirm,
+      sms_reminders: settings.smsReminders,
+      daily_digest: settings.dailyDigest
+    })
+  });
+  return toSettings(row);
 }
