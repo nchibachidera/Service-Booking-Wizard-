@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createReference, getUpcomingDays } from '../utils/schedule';
 import { useScreenInit } from '../useScreenInit.js';
-import { ApiError, createBooking, fetchServices, fetchSlots } from '../api';
+import {
+  ApiError,
+  createBooking,
+  fetchServices,
+  fetchSlots,
+  fetchStudio,
+  type PublicStudio
+} from '../api';
 import type { FieldErrors, Service, Step, TimeSlot } from '../types/booking';
 
 type Status = 'idle' | 'submitting';
@@ -22,7 +29,20 @@ interface SlotsState {
 
 export function useBookingFlow() {
   const init = useScreenInit() as ScreenInit;
-  const days = useMemo(() => getUpcomingDays(7), []);
+
+  // The studio's real name, open weekdays and blocked dates (null until loaded)
+  const [studio, setStudio] = useState<PublicStudio | null>(null);
+
+  const days = useMemo(
+    () =>
+      getUpcomingDays(
+        7,
+        studio
+          ? { openWeekdays: studio.openDays, blockedDates: studio.blockedDates }
+          : undefined
+      ),
+    [studio]
+  );
   const firstOpenDay = days.find((day) => !day.isClosed) ?? days[0];
 
   const [step, setStep] = useState<Step>(init.step ?? 'service');
@@ -32,8 +52,14 @@ export function useBookingFlow() {
   const [servicesError, setServicesError] = useState('');
 
   const [service, setService] = useState<Service | null>(null);
-  const [dayIso, setDayIso] = useState<string>(firstOpenDay.iso);
+  const [chosenDay, setChosenDay] = useState<string | null>(null);
   const [time, setTime] = useState<string | null>(init.time ?? null);
+
+  // The day in use: the one the customer picked, unless it has become closed
+  const dayIso = useMemo(() => {
+    const chosen = days.find((day) => day.iso === chosenDay);
+    return chosen && !chosen.isClosed ? chosen.iso : firstOpenDay.iso;
+  }, [days, chosenDay, firstOpenDay.iso]);
 
   const [slotsState, setSlotsState] = useState<SlotsState>({
     key: '',
@@ -50,6 +76,21 @@ export function useBookingFlow() {
   const [reference, setReference] = useState(() =>
     init.step === 'success' ? createReference() : ''
   );
+
+  // Load the studio details once
+  useEffect(() => {
+    let cancelled = false;
+    fetchStudio()
+      .then((result) => {
+        if (!cancelled) setStudio(result);
+      })
+      .catch(() => {
+        // Keep the defaults (closed on Sundays) if the details can't load
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Load services from the API once
   useEffect(() => {
@@ -115,7 +156,7 @@ export function useBookingFlow() {
   }, []);
 
   const selectDay = useCallback((iso: string) => {
-    setDayIso(iso);
+    setChosenDay(iso);
     setTime(null);
     setNotice('');
   }, []);
@@ -167,7 +208,7 @@ export function useBookingFlow() {
 
   const reset = useCallback(() => {
     setService(null);
-    setDayIso(firstOpenDay.iso);
+    setChosenDay(null);
     setTime(null);
     setName('');
     setPhone('');
@@ -175,9 +216,10 @@ export function useBookingFlow() {
     setNotice('');
     setReference('');
     setStep('service');
-  }, [firstOpenDay.iso]);
+  }, []);
 
   return {
+    studioName: studio?.studioName ?? '',
     services,
     servicesLoading,
     servicesError,

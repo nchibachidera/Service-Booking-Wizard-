@@ -20,6 +20,7 @@ export function Booking() {
   const flow = useBookingFlow();
   const reduceMotion = useReducedMotion();
   const {
+    studioName,
     step,
     service,
     selectedDay,
@@ -69,7 +70,7 @@ export function Booking() {
               <ScissorsIcon aria-hidden="true" className="h-4 w-4" />
             </span>
             <span className="text-[15px] font-semibold tracking-[-0.01em]">
-              Maison Aster
+              {studioName}
             </span>
           </div>
 

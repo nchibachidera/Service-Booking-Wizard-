@@ -21,26 +21,36 @@ function toTimeLabel(minutes: number): string {
   return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 }
 
-export function getUpcomingDays(count = 7): DayOption[] {
+export interface DayRules {
+  openWeekdays: number[]; // 0 = Sunday ... 6 = Saturday
+  blockedDates: string[]; // yyyy-MM-dd
+}
+
+export function getUpcomingDays(count = 7, rules?: DayRules): DayOption[] {
   const today = startOfDay(new Date());
   return Array.from({ length: count }, (_, index) => {
     const date = addDays(today, index);
+    const iso = format(date, 'yyyy-MM-dd');
+    const isClosed = rules
+      ? !rules.openWeekdays.includes(date.getDay()) ||
+        rules.blockedDates.includes(iso)
+      : date.getDay() === 0;
     return {
-      iso: format(date, 'yyyy-MM-dd'),
+      iso,
       date,
       weekday: format(date, 'EEE'),
       dayOfMonth: format(date, 'd'),
       month: format(date, 'MMM'),
       isToday: index === 0,
-      isClosed: date.getDay() === 0
+      isClosed
     };
   });
 }
 
 export function getSlotsForDay(
-iso: string,
-durationMinutes: number)
-: TimeSlot[] {
+  iso: string,
+  durationMinutes: number
+): TimeSlot[] {
   const day = new Date(`${iso}T00:00:00`);
   if (day.getDay() === 0) return [];
 
@@ -50,10 +60,10 @@ durationMinutes: number)
   const slots: TimeSlot[] = [];
 
   for (
-  let minutes = OPEN_MINUTES;
-  minutes + durationMinutes <= CLOSE_MINUTES;
-  minutes += SLOT_STEP)
-  {
+    let minutes = OPEN_MINUTES;
+    minutes + durationMinutes <= CLOSE_MINUTES;
+    minutes += SLOT_STEP
+  ) {
     const time = toTimeLabel(minutes);
     const inPast = isToday && minutes <= nowMinutes + 30;
     const booked = hash(`${iso}-${time}`) % 10 < 4;
