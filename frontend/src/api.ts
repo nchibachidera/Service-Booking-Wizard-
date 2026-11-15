@@ -27,6 +27,12 @@ interface ApiSlot {
   available: boolean;
 }
 
+interface ApiStudio {
+  studio_name: string;
+  open_days: number[];
+  blocked_dates: string[];
+}
+
 interface ApiAdminBooking {
   id: number;
   customer_name: string;
@@ -63,6 +69,12 @@ interface ApiSettings {
   auto_confirm: boolean;
   sms_reminders: boolean;
   daily_digest: boolean;
+}
+
+export interface PublicStudio {
+  studioName: string;
+  openDays: number[]; // 0 = Sunday ... 6 = Saturday
+  blockedDates: string[]; // yyyy-MM-dd
 }
 
 export interface ProviderProfile {
@@ -224,6 +236,15 @@ function toSettings(row: ApiSettings): ProviderSettings {
 export async function fetchServices(): Promise<Service[]> {
   const rows = await request<ApiService[]>('/services');
   return rows.map(toService);
+}
+
+export async function fetchStudio(): Promise<PublicStudio> {
+  const row = await request<ApiStudio>('/public/studio');
+  return {
+    studioName: row.studio_name,
+    openDays: row.open_days,
+    blockedDates: row.blocked_dates.map((date) => date.slice(0, 10))
+  };
 }
 
 export async function fetchSlots(

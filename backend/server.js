@@ -7,6 +7,7 @@ import servicesRouter from "./src/routes/services.js";
 import authRouter from "./src/routes/auth.js";
 import adminRouter from "./src/routes/admin.js";
 import settingsRouter from "./src/routes/settings.js";
+import publicRouter from "./src/routes/public.js";
 
 dotenv.config();
 
@@ -31,6 +32,7 @@ app.use("/api", servicesRouter);
 app.use("/api", authRouter);
 app.use("/api", adminRouter);
 app.use("/api", settingsRouter);
+app.use("/api", publicRouter);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
