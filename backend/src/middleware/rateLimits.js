@@ -35,3 +35,12 @@ export const bookingLimiter = createLimiter({
   limit: 20,
   message: "Too many booking attempts. Please try again in a few minutes."
 });
+
+// Looking up or cancelling a booking: only failed attempts count,
+// which slows down anyone guessing references and phone numbers
+export const lookupLimiter = createLimiter({
+  windowMs: FIFTEEN_MINUTES,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  message: "Too many attempts. Please wait 15 minutes and try again."
+});

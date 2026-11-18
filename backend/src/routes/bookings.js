@@ -2,6 +2,7 @@ import express from "express";
 import pool from "../db/index.js";
 import { toMinutes, fromMinutes } from "../utils/time.js";
 import { isValidDate, isValidTime } from "../utils/validate.js";
+import { isFarEnoughAhead } from "../utils/studioTime.js";
 
 const router = express.Router();
 
@@ -40,7 +41,10 @@ router.post("/bookings", async (req, res) => {
     }
 
     const serviceResult = await pool.query(
-      "SELECT duration_minutes, provider_id FROM services WHERE id = $1",
+      `SELECT s.duration_minutes, s.provider_id, p.min_notice_hours
+       FROM services s
+       JOIN providers p ON p.id = s.provider_id
+       WHERE s.id = $1`,
       [serviceId]
     );
 
@@ -48,7 +52,8 @@ router.post("/bookings", async (req, res) => {
       return res.status(404).json({ error: "service not found" });
     }
 
-    const { duration_minutes, provider_id } = serviceResult.rows[0];
+    const { duration_minutes, provider_id, min_notice_hours } =
+      serviceResult.rows[0];
 
     // Refuse blocked dates
     const blocked = await pool.query(
@@ -79,6 +84,11 @@ router.post("/bookings", async (req, res) => {
       return res
         .status(409)
         .json({ error: "that time is outside our opening hours" });
+    }
+
+    // Refuse past times and anything inside the minimum notice
+    if (!isFarEnoughAhead(date, startMinutes, min_notice_hours)) {
+      return res.status(409).json({ error: "that time is too soon to book" });
     }
 
     const end_time = fromMinutes(endMinutes);

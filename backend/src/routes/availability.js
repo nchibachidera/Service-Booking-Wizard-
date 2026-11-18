@@ -2,6 +2,7 @@ import express from "express";
 import pool from "../db/index.js";
 import { toMinutes, fromMinutes } from "../utils/time.js";
 import { isValidDate } from "../utils/validate.js";
+import { isFarEnoughAhead, studioNow } from "../utils/studioTime.js";
 
 const router = express.Router();
 
@@ -18,9 +19,12 @@ router.get("/availability", async (req, res) => {
       return res.status(400).json({ error: "date or service_id is not valid" });
     }
 
-    // Step 1: get the service's duration
+    // Step 1: get the service's duration and the provider's minimum notice
     const serviceResult = await pool.query(
-      "SELECT duration_minutes, provider_id FROM services WHERE id = $1",
+      `SELECT s.duration_minutes, s.provider_id, p.min_notice_hours
+       FROM services s
+       JOIN providers p ON p.id = s.provider_id
+       WHERE s.id = $1`,
       [service_id]
     );
 
@@ -28,7 +32,8 @@ router.get("/availability", async (req, res) => {
       return res.status(404).json({ error: "service not found" });
     }
 
-    const { duration_minutes, provider_id } = serviceResult.rows[0];
+    const { duration_minutes, provider_id, min_notice_hours } =
+      serviceResult.rows[0];
 
     // Step 2: a blocked date has no times at all
     const blockedResult = await pool.query(
@@ -67,10 +72,12 @@ router.get("/availability", async (req, res) => {
     const existingBookings = bookingsResult.rows;
 
     // Step 5: walk the working window in SLOT_INTERVAL_MINUTES steps
-    // and report every slot, marking whether it is still free
+    // and report every slot, marking whether it is still free and
+    // far enough ahead (the studio's clock decides)
     const windowStart = toMinutes(start_time);
     const windowEnd = toMinutes(end_time);
     const duration = duration_minutes;
+    const now = studioNow();
 
     const slots = [];
     let candidateStart = windowStart;
@@ -86,7 +93,9 @@ router.get("/availability", async (req, res) => {
 
       slots.push({
         time: fromMinutes(candidateStart),
-        available: !hasOverlap
+        available:
+          !hasOverlap &&
+          isFarEnoughAhead(date, candidateStart, min_notice_hours, now)
       });
 
       candidateStart += SLOT_INTERVAL_MINUTES;

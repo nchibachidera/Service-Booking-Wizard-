@@ -198,6 +198,20 @@ export function Booking() {
             </motion.div>
           </AnimatePresence>
 
+          {(step === 'service' || step === 'success') && (
+            <p className="mt-8 text-[13px] text-muted">
+              {step === 'success'
+                ? 'Need to change or cancel? '
+                : 'Already booked? '}
+              <Link
+                to="/manage"
+                state={{ reference }}
+                className="rounded underline decoration-line underline-offset-2 transition-colors duration-150 ease-expo hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring">
+                Manage your booking
+              </Link>
+            </p>
+          )}
+
           {/* Desktop action, inline under content */}
           {showFooter && (
             <div className="mt-8 hidden lg:block">

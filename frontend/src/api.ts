@@ -33,6 +33,21 @@ interface ApiStudio {
   blocked_dates: string[];
 }
 
+interface ApiManagedBooking {
+  reference: string;
+  customer_name: string;
+  service_name: string;
+  duration_minutes: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  status: BookingStatus;
+  cancel_state: 'allowed' | 'cancelled' | 'past' | 'window';
+  cancel_window_hours: number;
+  studio_name: string;
+  studio_phone: string;
+}
+
 interface ApiAdminBooking {
   id: number;
   customer_name: string;
@@ -75,6 +90,21 @@ export interface PublicStudio {
   studioName: string;
   openDays: number[]; // 0 = Sunday ... 6 = Saturday
   blockedDates: string[]; // yyyy-MM-dd
+}
+
+export interface ManagedBooking {
+  reference: string;
+  customerName: string;
+  serviceName: string;
+  durationMinutes: number;
+  dateIso: string;
+  time: string;
+  endTime: string;
+  status: BookingStatus;
+  cancelState: 'allowed' | 'cancelled' | 'past' | 'window';
+  cancelWindowHours: number;
+  studioName: string;
+  studioPhone: string;
 }
 
 export interface ProviderProfile {
@@ -186,6 +216,23 @@ function toAdminBooking(row: ApiAdminBooking): Booking {
   };
 }
 
+function toManagedBooking(row: ApiManagedBooking): ManagedBooking {
+  return {
+    reference: row.reference,
+    customerName: row.customer_name,
+    serviceName: row.service_name,
+    durationMinutes: row.duration_minutes,
+    dateIso: row.date.slice(0, 10),
+    time: row.start_time.slice(0, 5),
+    endTime: row.end_time.slice(0, 5),
+    status: row.status,
+    cancelState: row.cancel_state,
+    cancelWindowHours: row.cancel_window_hours,
+    studioName: row.studio_name,
+    studioPhone: row.studio_phone
+  };
+}
+
 // The database stores Sunday as 0 and Saturday as 6
 const DAY_INDEX: Record<WeekdayKey, number> = {
   sunday: 0,
@@ -283,6 +330,30 @@ export async function createBooking(input: NewBooking): Promise<{ id: number }> 
       customer_phone: input.customerPhone
     })
   });
+}
+
+export async function lookupBooking(
+  reference: string,
+  phone: string
+): Promise<ManagedBooking> {
+  const row = await request<ApiManagedBooking>('/bookings/lookup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reference, phone })
+  });
+  return toManagedBooking(row);
+}
+
+export async function cancelBooking(
+  reference: string,
+  phone: string
+): Promise<ManagedBooking> {
+  const row = await request<ApiManagedBooking>('/bookings/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reference, phone })
+  });
+  return toManagedBooking(row);
 }
 
 export async function loginProvider(
