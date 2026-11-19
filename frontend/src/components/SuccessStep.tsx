@@ -7,6 +7,7 @@ import {
   formatDuration,
   formatPrice
 } from '../utils/schedule';
+import type { BookingStatus } from '../types/admin';
 import type { Service } from '../types/booking';
 
 interface SuccessStepProps {
@@ -16,6 +17,7 @@ interface SuccessStepProps {
   name: string;
   phone: string;
   reference: string;
+  status: BookingStatus;
   onBookAnother: () => void;
 }
 
@@ -26,9 +28,11 @@ export function SuccessStep({
   name,
   phone,
   reference,
+  status,
   onBookAnother
 }: SuccessStepProps) {
   const reduceMotion = useReducedMotion();
+  const isPending = status === 'pending';
 
   const details: { label: string; value: string }[] = [
     { label: 'Service', value: service.name },
@@ -42,6 +46,9 @@ export function SuccessStep({
     { label: 'Name', value: name },
     { label: 'Phone', value: phone },
     { label: 'Reference', value: reference },
+    ...(isPending
+      ? [{ label: 'Status', value: 'Awaiting confirmation' }]
+      : []),
     { label: 'Due in studio', value: formatPrice(service.price) }
   ];
 
@@ -58,11 +65,12 @@ export function SuccessStep({
       <h2
         id="success-heading"
         className="mt-6 text-[28px] font-semibold leading-tight tracking-[-0.02em] text-ink sm:text-[34px]">
-        You're booked, {name.split(' ')[0]}
+        {isPending ? 'Request received' : "You're booked"}, {name.split(' ')[0]}
       </h2>
       <p className="mx-auto mt-2 max-w-sm text-[15px] leading-6 text-muted">
-        Keep your booking reference below. With your phone number, it lets you
-        change or cancel online.
+        {isPending
+          ? 'The studio will review your request. Check its status any time with your booking reference and phone number.'
+          : 'Keep your booking reference below. With your phone number, it lets you change or cancel online.'}
       </p>
 
       <dl className="mt-8 overflow-hidden rounded-3xl bg-surface px-5 text-left shadow-soft sm:px-6">

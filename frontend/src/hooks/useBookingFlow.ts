@@ -9,6 +9,7 @@ import {
   fetchStudio,
   type PublicStudio
 } from '../api';
+import type { BookingStatus } from '../types/admin';
 import type { FieldErrors, Service, Step, TimeSlot } from '../types/booking';
 
 type Status = 'idle' | 'submitting';
@@ -30,7 +31,7 @@ interface SlotsState {
 export function useBookingFlow() {
   const init = useScreenInit() as ScreenInit;
 
-  // The studio's real name, open weekdays and blocked dates (null until loaded)
+  // The studio's real name, rules, open weekdays and blocked dates (null until loaded)
   const [studio, setStudio] = useState<PublicStudio | null>(null);
 
   const days = useMemo(
@@ -76,6 +77,8 @@ export function useBookingFlow() {
   const [reference, setReference] = useState(() =>
     init.step === 'success' ? createReference() : ''
   );
+  // What the server decided for the booking just made (confirmed or pending)
+  const [bookingStatus, setBookingStatus] = useState<BookingStatus>('confirmed');
 
   // Load the studio details once
   useEffect(() => {
@@ -185,6 +188,7 @@ export function useBookingFlow() {
         customerName: name.trim(),
         customerPhone: phone.trim()
       });
+      setBookingStatus(booking.status);
       setReference(`BK-${String(booking.id).padStart(4, '0')}`);
       setStep('success');
     } catch (err) {
@@ -215,11 +219,14 @@ export function useBookingFlow() {
     setErrors({});
     setNotice('');
     setReference('');
+    setBookingStatus('confirmed');
     setStep('service');
   }, []);
 
   return {
     studioName: studio?.studioName ?? '',
+    autoConfirm: studio?.autoConfirm ?? true,
+    cancelWindowHours: studio?.cancelWindowHours ?? 24,
     services,
     servicesLoading,
     servicesError,
@@ -236,6 +243,7 @@ export function useBookingFlow() {
     errors,
     status,
     reference,
+    bookingStatus,
     notice,
     setStep,
     setTime: chooseTime,

@@ -8,7 +8,10 @@ const router = express.Router();
 router.get("/public/studio", async (req, res) => {
   try {
     const providerResult = await pool.query(
-      `SELECT id, COALESCE(studio_name, name) AS studio_name
+      `SELECT id,
+              COALESCE(studio_name, name) AS studio_name,
+              auto_confirm,
+              cancel_window_hours
        FROM providers
        ORDER BY id
        LIMIT 1`
@@ -42,6 +45,8 @@ router.get("/public/studio", async (req, res) => {
     res.set("Cache-Control", "no-store");
     res.json({
       studio_name: provider.studio_name,
+      auto_confirm: provider.auto_confirm,
+      cancel_window_hours: provider.cancel_window_hours,
       open_days: hoursResult.rows.map((row) => row.day_of_week),
       blocked_dates: blockedResult.rows.map((row) => row.date)
     });

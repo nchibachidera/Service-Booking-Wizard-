@@ -21,6 +21,8 @@ export function Booking() {
   const reduceMotion = useReducedMotion();
   const {
     studioName,
+    autoConfirm,
+    cancelWindowHours,
     step,
     service,
     selectedDay,
@@ -32,6 +34,7 @@ export function Booking() {
     errors,
     status,
     reference,
+    bookingStatus,
     notice,
     servicesLoading,
     servicesError,
@@ -178,6 +181,8 @@ export function Booking() {
                   name={name}
                   phone={phone}
                   errors={errors}
+                  autoConfirm={autoConfirm}
+                  cancelWindowHours={cancelWindowHours}
                   onNameChange={flow.setName}
                   onPhoneChange={flow.setPhone}
                   onEditService={() => flow.setStep('service')}
@@ -193,6 +198,7 @@ export function Booking() {
                   name={name}
                   phone={phone}
                   reference={reference}
+                  status={bookingStatus}
                   onBookAnother={flow.reset} />
               )}
             </motion.div>
@@ -201,7 +207,9 @@ export function Booking() {
           {(step === 'service' || step === 'success') && (
             <p className="mt-8 text-[13px] text-muted">
               {step === 'success'
-                ? 'Need to change or cancel? '
+                ? bookingStatus === 'pending'
+                  ? 'Want to check on your request? '
+                  : 'Need to change or cancel? '
                 : 'Already booked? '}
               <Link
                 to="/manage"
@@ -217,6 +225,7 @@ export function Booking() {
             <div className="mt-8 hidden lg:block">
               <PrimaryAction
                 step={step}
+                autoConfirm={autoConfirm}
                 disabled={step === 'time' && !time}
                 submitting={status === 'submitting'}
                 onClick={() =>
@@ -233,6 +242,7 @@ export function Booking() {
           <div className="mx-auto max-w-shell">
             <PrimaryAction
               step={step}
+              autoConfirm={autoConfirm}
               disabled={step === 'time' && !time}
               submitting={status === 'submitting'}
               onClick={() =>
@@ -247,6 +257,7 @@ export function Booking() {
 
 interface PrimaryActionProps {
   step: Step;
+  autoConfirm: boolean;
   disabled: boolean;
   submitting: boolean;
   onClick: () => void;
@@ -254,11 +265,18 @@ interface PrimaryActionProps {
 
 function PrimaryAction({
   step,
+  autoConfirm,
   disabled,
   submitting,
   onClick
 }: PrimaryActionProps) {
-  const label = step === 'time' ? 'Continue' : 'Confirm booking';
+  const label =
+    step === 'time'
+      ? 'Continue'
+      : autoConfirm
+        ? 'Confirm booking'
+        : 'Request booking';
+  const busyLabel = autoConfirm ? 'Confirming…' : 'Sending…';
   return (
     <button
       type="button"
@@ -268,7 +286,7 @@ function PrimaryAction({
       {submitting && (
         <Loader2Icon aria-hidden="true" className="h-4 w-4 animate-spin" />
       )}
-      {submitting ? 'Confirming…' : disabled ? 'Select a time' : label}
+      {submitting ? busyLabel : disabled ? 'Select a time' : label}
     </button>
   );
 }

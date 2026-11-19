@@ -41,7 +41,7 @@ router.post("/bookings", async (req, res) => {
     }
 
     const serviceResult = await pool.query(
-      `SELECT s.duration_minutes, s.provider_id, p.min_notice_hours
+      `SELECT s.duration_minutes, s.provider_id, p.min_notice_hours, p.auto_confirm
        FROM services s
        JOIN providers p ON p.id = s.provider_id
        WHERE s.id = $1`,
@@ -52,7 +52,7 @@ router.post("/bookings", async (req, res) => {
       return res.status(404).json({ error: "service not found" });
     }
 
-    const { duration_minutes, provider_id, min_notice_hours } =
+    const { duration_minutes, provider_id, min_notice_hours, auto_confirm } =
       serviceResult.rows[0];
 
     // Refuse blocked dates
@@ -109,12 +109,16 @@ router.post("/bookings", async (req, res) => {
       return res.status(409).json({ error: "that time slot is no longer available" });
     }
 
+    // With auto-confirm off, the booking waits for the provider to approve it.
+    // A pending booking still holds its time slot.
+    const status = auto_confirm ? "confirmed" : "pending";
+
     const result = await pool.query(
       `INSERT INTO bookings
         (provider_id, service_id, customer_name, customer_phone, date, start_time, end_time, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'confirmed')
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [provider_id, serviceId, name, phone, date, start_time, end_time]
+      [provider_id, serviceId, name, phone, date, start_time, end_time, status]
     );
 
     res.status(201).json(result.rows[0]);

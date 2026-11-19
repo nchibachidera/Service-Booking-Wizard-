@@ -29,6 +29,8 @@ interface ApiSlot {
 
 interface ApiStudio {
   studio_name: string;
+  auto_confirm: boolean;
+  cancel_window_hours: number;
   open_days: number[];
   blocked_dates: string[];
 }
@@ -88,6 +90,8 @@ interface ApiSettings {
 
 export interface PublicStudio {
   studioName: string;
+  autoConfirm: boolean;
+  cancelWindowHours: number;
   openDays: number[]; // 0 = Sunday ... 6 = Saturday
   blockedDates: string[]; // yyyy-MM-dd
 }
@@ -289,6 +293,8 @@ export async function fetchStudio(): Promise<PublicStudio> {
   const row = await request<ApiStudio>('/public/studio');
   return {
     studioName: row.studio_name,
+    autoConfirm: row.auto_confirm,
+    cancelWindowHours: row.cancel_window_hours,
     openDays: row.open_days,
     blockedDates: row.blocked_dates.map((date) => date.slice(0, 10))
   };
@@ -318,8 +324,10 @@ interface NewBooking {
   customerPhone: string;
 }
 
-export async function createBooking(input: NewBooking): Promise<{ id: number }> {
-  return request<{ id: number }>('/bookings', {
+export async function createBooking(
+  input: NewBooking
+): Promise<{ id: number; status: BookingStatus }> {
+  return request<{ id: number; status: BookingStatus }>('/bookings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

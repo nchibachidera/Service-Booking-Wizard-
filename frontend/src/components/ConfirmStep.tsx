@@ -10,6 +10,8 @@ interface ConfirmStepProps {
   name: string;
   phone: string;
   errors: FieldErrors;
+  autoConfirm: boolean;
+  cancelWindowHours: number;
   onNameChange: (value: string) => void;
   onPhoneChange: (value: string) => void;
   onEditService: () => void;
@@ -18,7 +20,7 @@ interface ConfirmStepProps {
 }
 
 const fieldClass =
-'h-12 w-full rounded-2xl bg-surface px-4 text-[15px] text-ink shadow-soft placeholder:text-faint transition-shadow duration-150 ease-expo focus:outline-none focus:ring-2 focus:ring-accent-ring';
+  'h-12 w-full rounded-2xl bg-surface px-4 text-[15px] text-ink shadow-soft placeholder:text-faint transition-shadow duration-150 ease-expo focus:outline-none focus:ring-2 focus:ring-accent-ring';
 
 export function ConfirmStep({
   service,
@@ -27,6 +29,8 @@ export function ConfirmStep({
   name,
   phone,
   errors,
+  autoConfirm,
+  cancelWindowHours,
   onNameChange,
   onPhoneChange,
   onEditService,
@@ -39,7 +43,6 @@ export function ConfirmStep({
         <h2
           id="confirm-heading"
           className="text-[26px] font-semibold leading-tight tracking-[-0.02em] text-ink sm:text-[32px]">
-          
           Almost done
         </h2>
         <p className="mt-2 text-[15px] leading-6 text-muted">
@@ -53,7 +56,6 @@ export function ConfirmStep({
         time={time}
         onEditService={onEditService}
         onEditTime={onEditTime} />
-      
 
       <form
         className="mt-7 space-y-5"
@@ -62,12 +64,10 @@ export function ConfirmStep({
           event.preventDefault();
           onSubmit();
         }}>
-        
         <div>
           <label
             htmlFor="customer-name"
             className="mb-2 block text-[13px] font-medium text-ink">
-            
             Full name
           </label>
           <input
@@ -81,23 +81,20 @@ export function ConfirmStep({
             aria-invalid={Boolean(errors.name)}
             aria-describedby={errors.name ? 'customer-name-error' : undefined}
             className={fieldClass} />
-          
-          {errors.name &&
-          <p
-            id="customer-name-error"
-            role="alert"
-            className="mt-2 text-[13px] text-red-700">
-            
+          {errors.name && (
+            <p
+              id="customer-name-error"
+              role="alert"
+              className="mt-2 text-[13px] text-red-700">
               {errors.name}
             </p>
-          }
+          )}
         </div>
 
         <div>
           <label
             htmlFor="customer-phone"
             className="mb-2 block text-[13px] font-medium text-ink">
-            
             Phone number
           </label>
           <input
@@ -106,39 +103,41 @@ export function ConfirmStep({
             type="tel"
             inputMode="tel"
             autoComplete="tel"
-            placeholder="(415) 555 0142"
+            placeholder="0801 234 5678"
             value={phone}
             onChange={(event) => onPhoneChange(event.target.value)}
             aria-invalid={Boolean(errors.phone)}
             aria-describedby={
-            errors.phone ? 'customer-phone-error' : 'phone-hint'
+              errors.phone ? 'customer-phone-error' : 'phone-hint'
             }
             className={fieldClass} />
-          
-          {errors.phone ?
-          <p
-            id="customer-phone-error"
-            role="alert"
-            className="mt-2 text-[13px] text-red-700">
-            
+          {errors.phone ? (
+            <p
+              id="customer-phone-error"
+              role="alert"
+              className="mt-2 text-[13px] text-red-700">
               {errors.phone}
-            </p> :
-
-          <p id="phone-hint" className="mt-2 text-[13px] text-muted">
-              We only use this to send your reminder.
             </p>
-          }
+          ) : (
+            <p id="phone-hint" className="mt-2 text-[13px] text-muted">
+              We use this to reach you about your booking. You'll also need it
+              to manage or cancel online.
+            </p>
+          )}
         </div>
 
         <p className="flex items-start gap-2.5 text-[13px] leading-6 text-muted">
           <ShieldCheckIcon
             aria-hidden="true"
             className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-          
-          Nothing is charged now — you pay in studio. Free to reschedule up to
-          24 hours before.
+          <span>
+            Nothing is charged now — you pay in studio. Free to cancel online up
+            to {cancelWindowHours} hours before.
+            {!autoConfirm &&
+              ' The studio confirms each request, so your booking stays pending until then.'}
+          </span>
         </p>
       </form>
-    </section>);
-
+    </section>
+  );
 }
