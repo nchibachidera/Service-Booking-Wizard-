@@ -43,7 +43,7 @@ export function BookingSummary({
   service,
   dayIso,
   time,
-  variant = 'card',
+  variant = 'card'
   onEditService,
   onEditTime
 }: BookingSummaryProps) {
